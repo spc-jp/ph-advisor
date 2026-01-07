@@ -1,0 +1,872 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>愛され薬局アドバイザー</title>
+    <meta name="description" content="調剤薬局のための品質向上・提案アプリ">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Zen+Maru+Gothic:wght@400;700&display=swap');
+
+        :root {
+            --primary: #FF8BA7;
+            --primary-dark: #E05D82;
+            --bg: #FFF5F7;
+            --card: #FFFFFF;
+            --text: #4A4A4A;
+        }
+
+        body {
+            font-family: 'Zen Maru Gothic', sans-serif;
+            background-color: var(--bg);
+            color: var(--text);
+            padding-bottom: 40px;
+        }
+
+        .card {
+            background: var(--card);
+            border-radius: 20px;
+            box-shadow: 0 4px 15px rgba(255, 139, 167, 0.1);
+            transition: transform 0.2s;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+            color: white;
+            box-shadow: 0 4px 10px rgba(224, 93, 130, 0.3);
+        }
+
+        .chart-container {
+            position: relative;
+            height: 250px;
+            width: 100%;
+            margin: 0 auto;
+        }
+        
+        .history-chart-container {
+            position: relative;
+            height: 150px;
+            width: 100%;
+            margin-top: 10px;
+        }
+
+        .check-item {
+            display: flex;
+            align-items: center;
+            padding: 12px;
+            border: 1px solid #eee;
+            border-radius: 12px;
+            margin-bottom: 8px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .check-item:hover {
+            background-color: #FFF0F3;
+        }
+        .check-item input:checked + span {
+            font-weight: bold;
+            color: var(--primary-dark);
+        }
+        .check-item input:checked + span::after {
+            content: ' ✨';
+        }
+        
+        .score-badge {
+            width: 80px;
+            height: 80px;
+            border-radius: 50%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            background: var(--primary);
+            color: white;
+            font-weight: bold;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+        }
+
+        /* Type Selector */
+        .type-selector label {
+            cursor: pointer;
+        }
+        .type-selector input:checked + div {
+            background-color: var(--primary);
+            color: white;
+            border-color: var(--primary);
+        }
+
+        /* Variation Tabs */
+        .var-tab {
+            font-size: 0.75rem;
+            padding: 6px 12px;
+            border-radius: 20px;
+            border: 1px solid #ddd;
+            background: white;
+            color: #666;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .var-tab.active {
+            background: var(--primary);
+            color: white;
+            border-color: var(--primary);
+            font-weight: bold;
+        }
+
+        /* Modal Styles */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.5);
+            z-index: 100;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.3s;
+            padding: 20px;
+            backdrop-filter: blur(2px);
+        }
+        .modal-overlay.show {
+            opacity: 1;
+            pointer-events: auto;
+        }
+        .modal-content {
+            background: var(--card);
+            border-radius: 20px;
+            width: 100%;
+            max-width: 400px;
+            padding: 24px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.2);
+            position: relative;
+            color: var(--text);
+        }
+        .close-modal {
+            position: absolute;
+            top: 15px;
+            right: 15px;
+            font-size: 1.5rem;
+            color: #999;
+            background: none;
+            border: none;
+            cursor: pointer;
+            padding: 5px;
+            line-height: 1;
+        }
+
+        /* Toast Notification */
+        #toast {
+            position: fixed;
+            bottom: 30px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(50, 50, 50, 0.9);
+            color: white;
+            padding: 12px 24px;
+            border-radius: 50px;
+            font-size: 0.9rem;
+            font-weight: bold;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.3s;
+            z-index: 200;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+        }
+        #toast.show {
+            opacity: 1;
+        }
+
+        @keyframes slideUp {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .animate-slide-up {
+            animation: slideUp 0.5s ease forwards;
+        }
+
+        .hidden { display: none; }
+        .header-title-area { cursor: pointer; }
+    </style>
+</head>
+<body>
+
+    <!-- Header -->
+    <header class="bg-gradient-to-r from-pink-400 to-pink-500 text-white p-4 sticky top-0 z-50 shadow-md">
+        <div class="max-w-md mx-auto flex justify-between items-center">
+            <div class="header-title-area" onclick="app.reset(false)">
+                <h1 class="text-lg font-bold">愛され薬局アドバイザー</h1>
+                <p class="text-xs opacity-90">患者様の声から改善へ</p>
+            </div>
+            <div class="flex gap-2">
+                <button onclick="app.toggleHelp(true)" class="text-xs bg-white/20 px-3 py-1 rounded-full hover:bg-white/30 flex items-center gap-1">
+                    <span class="text-sm">❓</span>使い方
+                </button>
+                <button onclick="app.reset(true)" class="text-xs bg-white/20 px-3 py-1 rounded-full hover:bg-white/30">最初に戻る</button>
+            </div>
+        </div>
+    </header>
+
+    <div class="max-w-md mx-auto p-4">
+
+        <!-- STEP 1: Hearing -->
+        <div id="step1" class="animate-slide-up">
+            
+            <!-- Pharmacy Type Selector -->
+            <div class="card p-4 mb-4">
+                <h3 class="text-sm font-bold text-gray-500 mb-2">薬局のタイプを選択</h3>
+                <div class="grid grid-cols-3 gap-2 type-selector">
+                    <label>
+                        <input type="radio" name="pType" value="local" checked class="hidden" onchange="app.changeType('local')">
+                        <div class="border border-gray-200 rounded-lg p-2 text-center text-xs font-bold transition">
+                            地域密着<br><span class="text-[10px] font-normal">かかりつけ</span>
+                        </div>
+                    </label>
+                    <label>
+                        <input type="radio" name="pType" value="busy" class="hidden" onchange="app.changeType('busy')">
+                        <div class="border border-gray-200 rounded-lg p-2 text-center text-xs font-bold transition">
+                            門前・総合<br><span class="text-[10px] font-normal">スピード</span>
+                        </div>
+                    </label>
+                    <label>
+                        <input type="radio" name="pType" value="home" class="hidden" onchange="app.changeType('home')">
+                        <div class="border border-gray-200 rounded-lg p-2 text-center text-xs font-bold transition">
+                            在宅メイン<br><span class="text-[10px] font-normal">家族連携</span>
+                        </div>
+                    </label>
+                </div>
+            </div>
+
+            <div class="card p-6 mb-6 text-center">
+                <div class="flex justify-between items-start">
+                    <div class="w-8"></div><!-- spacer -->
+                    <div>
+                        <div class="text-4xl mb-2">🩺</div>
+                        <h2 class="text-xl font-bold mb-2 text-pink-600">現状ヒアリング</h2>
+                        <p class="text-sm text-gray-500">
+                            今の状態をチェックしましょう。<br>
+                            <button onclick="app.shuffleQuestions()" class="text-xs text-blue-500 underline mt-1">
+                                🔄 質問を入れ替える
+                            </button>
+                        </p>
+                    </div>
+                    <div class="w-8"></div><!-- spacer -->
+                </div>
+                
+                <!-- History Preview -->
+                <div id="miniHistory" class="hidden text-xs text-gray-400 mt-3 bg-gray-50 p-2 rounded-lg">
+                    前回: <span id="lastDate">-</span> (スコア: <span id="lastScore">-</span>)
+                </div>
+            </div>
+
+            <div id="questionsContainer">
+                <!-- JS Populated -->
+            </div>
+
+            <button onclick="app.analyze()" class="btn-primary w-full py-4 rounded-full font-bold text-lg shadow-lg transform active:scale-95 transition">
+                診断する
+            </button>
+            
+            <div class="mt-8 text-center">
+                <button onclick="app.clearHistory()" class="text-xs text-gray-400 underline">履歴データを削除</button>
+            </div>
+        </div>
+
+
+        <!-- STEP 2: Result -->
+        <div id="step2" class="hidden animate-slide-up">
+            <div class="flex items-center justify-between mb-4">
+                <h2 class="text-xl font-bold text-gray-800">診断結果レポート</h2>
+                <div class="score-badge">
+                    <span class="text-xs opacity-80">スコア</span>
+                    <span class="text-2xl" id="totalScore">0</span>
+                </div>
+            </div>
+
+            <div class="card p-4 mb-6">
+                <!-- Radar Chart -->
+                <div class="chart-container mb-4">
+                    <canvas id="radarChart"></canvas>
+                </div>
+                
+                <p id="analysisComment" class="text-center font-bold text-pink-600 text-sm mb-4"></p>
+
+                <!-- Copy Report Button -->
+                <div class="text-center mb-4">
+                    <button onclick="app.copyReport()" class="bg-gray-100 text-gray-600 text-xs px-4 py-2 rounded-full border border-gray-300 hover:bg-gray-200">
+                        📋 診断結果をコピーして保存
+                    </button>
+                </div>
+
+                <!-- History Chart -->
+                <div class="border-t border-gray-100 pt-4">
+                    <h4 class="text-xs font-bold text-gray-500 mb-2">📈 成長の記録（過去5回）</h4>
+                    <div class="history-chart-container">
+                        <canvas id="historyChart"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Proposals -->
+            <h3 class="font-bold text-gray-700 mb-4">💡 タイプ別：改善アクション</h3>
+            <div id="proposalList" class="space-y-4"></div>
+
+            <div class="mt-8 text-center">
+                <p class="text-xs text-gray-500 mb-2">アクションを実行したら...</p>
+                <button onclick="app.showSnsDraft()" class="bg-gradient-to-r from-blue-500 to-blue-600 text-white w-full py-3 rounded-full font-bold shadow-lg">
+                    SNS投稿を作成する
+                </button>
+            </div>
+        </div>
+
+
+        <!-- STEP 3: SNS Draft -->
+        <div id="step3" class="hidden animate-slide-up">
+            <div class="flex items-center mb-4 cursor-pointer" onclick="app.backToResult()">
+                <span class="text-gray-400 mr-2">←</span>
+                <h2 class="text-xl font-bold text-gray-800">SNS投稿ドラフト</h2>
+            </div>
+            
+            <div class="bg-blue-50 border-l-4 border-blue-500 p-4 mb-6 rounded-r">
+                <p class="text-sm text-blue-800 font-bold mb-1">素晴らしい取り組みです！</p>
+                <p class="text-xs text-blue-600">この改善をSNSで発信し、患者様との信頼関係を深めましょう。</p>
+            </div>
+
+            <div class="card p-6 mb-6">
+                <div class="flex justify-center gap-2 mb-3">
+                    <button class="var-tab active" onclick="app.setDraftVariation(0)">案① 標準</button>
+                    <button class="var-tab" onclick="app.setDraftVariation(1)">案② 親しみ</button>
+                    <button class="var-tab" onclick="app.setDraftVariation(2)">案③ シンプル</button>
+                </div>
+
+                <!-- Input area with auto height -->
+                <div id="snsDraftText" class="w-full min-h-[12rem] h-auto p-4 bg-gray-50 rounded-xl border border-gray-200 text-sm leading-relaxed mb-6 outline-none focus:border-blue-400 whitespace-pre-wrap" contenteditable="true">
+                    <!-- JS Generated Text -->
+                </div>
+
+                <div>
+                    <button onclick="app.copyText()" class="w-full bg-gray-800 text-white py-3 rounded-lg font-bold text-sm hover:bg-gray-700 transition shadow-lg">
+                        コピーする
+                    </button>
+                </div>
+            </div>
+
+            <!-- External Link Area -->
+            <div class="card p-6 bg-gradient-to-br from-blue-50 to-indigo-50 border-none shadow-none text-center">
+                <p class="text-sm font-bold text-indigo-800 mb-2">もっと本格的に作りたいですか？</p>
+                <p class="text-xs text-gray-600 mb-4">
+                    季節の挨拶、NGワードチェック、<br>
+                    写真に合わせた投稿作成ならこちら
+                </p>
+                <a href="https://spc-jp.github.io/pharmacy-sns-navigator/" target="_blank" class="block w-full bg-indigo-500 text-white font-bold py-3 rounded-full shadow-lg hover:bg-indigo-600 transition transform hover:-translate-y-1">
+                    やさしい薬局SNSナビへ移動 🚀
+                </a>
+            </div>
+            
+            <div class="mt-8 pt-6 border-t border-gray-200 text-center">
+                <p class="text-xs text-gray-400">Powered by SPC</p>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- Help Modal -->
+    <div id="helpModal" class="modal-overlay" onclick="app.toggleHelp(false)">
+        <div class="modal-content" onclick="event.stopPropagation()">
+            <button class="close-modal" onclick="app.toggleHelp(false)">&times;</button>
+            <h3 class="text-lg font-bold text-pink-600 mb-4 text-center">このアプリの使い方</h3>
+            
+            <div class="space-y-4">
+                <div>
+                    <h4 class="font-bold text-gray-700 mb-1">🎯 アプリの目的</h4>
+                    <p class="text-sm text-gray-500 leading-relaxed">
+                        患者様お一人おひとりを大切にする「愛される薬局」へ。<br>
+                        日々の小さな気配りや改善を提案し、その温かい取り組みをSNSで発信することで、地域との信頼を深めます。
+                    </p>
+                </div>
+                
+                <div class="bg-pink-50 p-4 rounded-xl border border-pink-100">
+                    <h4 class="font-bold text-gray-700 mb-2">🚀 使い方の流れ</h4>
+                    <ol class="text-sm text-gray-600 list-none space-y-3">
+                        <li class="flex items-start">
+                            <span class="bg-pink-400 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs font-bold mr-2 flex-shrink-0 mt-0.5">1</span>
+                            <div>
+                                <strong class="text-pink-600 block mb-0.5">現状チェック</strong>
+                                薬局タイプを選び、今日の状況をチェックします。<br>
+                                <span class="text-xs text-blue-500 font-bold">※「🔄 質問を入れ替える」でマンネリ防止！</span>
+                            </div>
+                        </li>
+                        <li class="flex items-start">
+                            <span class="bg-pink-400 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs font-bold mr-2 flex-shrink-0 mt-0.5">2</span>
+                            <div>
+                                <strong class="text-pink-600 block mb-0.5">診断＆アドバイス</strong>
+                                スコアを見て、今すぐできる改善アクションを選びます。
+                            </div>
+                        </li>
+                        <li class="flex items-start">
+                            <span class="bg-pink-400 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs font-bold mr-2 flex-shrink-0 mt-0.5">3</span>
+                            <div>
+                                <strong class="text-pink-600 block mb-0.5">SNS投稿作成</strong>
+                                3つの文案から選んでSNSに投稿しましょう。<br>
+                                <span class="text-xs text-indigo-500 mt-1 block">※詳細な作成ツールへの移動も可能です</span>
+                            </div>
+                        </li>
+                    </ol>
+                </div>
+            </div>
+
+            <div class="mt-6 text-center">
+                <button class="btn-primary px-8 py-2 rounded-full text-sm font-bold shadow-md" onclick="app.toggleHelp(false)">とじる</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Reset Confirm Modal (Custom) -->
+    <div id="resetModal" class="modal-overlay" onclick="app.toggleResetModal(false)">
+        <div class="modal-content" onclick="event.stopPropagation()">
+            <h3 class="text-lg font-bold text-gray-800 mb-4 text-center">最初に戻りますか？</h3>
+            <p class="text-sm text-gray-600 text-center mb-6">
+                入力中のデータはリセットされます。<br>
+                （診断履歴は保存されます）
+            </p>
+            <div class="flex gap-4 justify-center">
+                <button class="bg-gray-100 text-gray-600 px-6 py-2 rounded-full font-bold text-sm" onclick="app.toggleResetModal(false)">キャンセル</button>
+                <button class="bg-pink-500 text-white px-6 py-2 rounded-full font-bold text-sm shadow-md" onclick="app.executeReset()">OK</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- History Clear Confirm Modal (Added) -->
+    <div id="historyClearModal" class="modal-overlay" onclick="app.toggleHistoryModal(false)">
+        <div class="modal-content" onclick="event.stopPropagation()">
+            <h3 class="text-lg font-bold text-gray-800 mb-4 text-center">履歴を削除しますか？</h3>
+            <p class="text-sm text-gray-600 text-center mb-6">
+                過去の診断データがすべて消去されます。<br>
+                この操作は取り消せません。
+            </p>
+            <div class="flex gap-4 justify-center">
+                <button class="bg-gray-100 text-gray-600 px-6 py-2 rounded-full font-bold text-sm" onclick="app.toggleHistoryModal(false)">キャンセル</button>
+                <button class="bg-red-500 text-white px-6 py-2 rounded-full font-bold text-sm shadow-md" onclick="app.executeClearHistory()">削除する</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Notification -->
+    <div id="toast">コピーしました！</div>
+
+    <script>
+        // Question Pool
+        const questionPool = {
+            env: [
+                "待合室の観葉植物や掲示物は季節感がある",
+                "入り口やカウンターにゴミや汚れがない",
+                "BGMや照明は患者様が落ち着ける設定だ",
+                "トイレや洗面台のアメニティは充実している",
+                "キッズスペースや絵本は整理整頓されている",
+                "掲示物は色あせておらず、最新の情報だ"
+            ],
+            hosp: [
+                "患者様が入店した際、必ず目を見て挨拶している",
+                "お薬手帳の有無だけでなく、体調の変化も聞いている",
+                "高齢の方や子供連れの方へ、座席までの配慮がある",
+                "専門用語を使わず、わかりやすい言葉で説明している",
+                "待ち時間が長い時、途中でお声がけをしている",
+                "服薬指導の際、患者様の生活リズムを確認している"
+            ],
+            info: [
+                "SNSや掲示板で、混雑状況や休日情報を伝えている",
+                "キャッシュレス決済に対応している",
+                "Googleマップの口コミに返信している",
+                "LINE等で処方箋送信の仕組みを案内している",
+                "健康イベントや相談会の告知を行っている",
+                "在宅対応や地域連携について店頭で発信している"
+            ]
+        };
+
+        const app = {
+            chart: null,
+            historyChart: null,
+            currentType: 'local',
+            data: { env: 0, hosp: 0, info: 0 },
+            currentProposal: null,
+            historyData: [],
+            activeQuestions: { env: [], hosp: [], info: [] },
+            
+            currentDraftVariations: [],
+
+            adviceDatabase: {
+                // 地域密着（local）
+                local: {
+                    env: [
+                        { title: "季節の飾り付け", desc: "季節感は「変化への気配り」の証。小さな花一輪でも安心感につながります。", snsTemplate: "【今月の待合室🌸】\nこんにちは！\n待合室にお花を飾りました。\nお薬をお待ちの間、少しでもホッとしていただければ嬉しいです。\n#癒やし #地域密着" },
+                        { title: "手書きPOPの導入", desc: "温かみのある手書きメッセージで、おすすめ商品や健康情報を伝えましょう。", snsTemplate: "【スタッフのおすすめ✏️】\n乾燥する季節に向けて、手書きPOPを作りました！\n保湿ケアのコツ、ぜひチェックしてくださいね。\n#手書きPOP #健康相談" }
+                    ],
+                    hosp: [
+                        { title: "「プラス一言」運動", desc: "天気や体調を気遣う一言を添え、心理的な距離を縮めましょう。", snsTemplate: "【心も温かく☀️】\n今日は寒いですね。\n当薬局では、温かいお茶をご用意しております。\nお薬のこと以外でも、お気軽にお声がけください。\n#健康サポート #ホッと一息" },
+                        { title: "名前呼びかけ", desc: "可能であれば「〇〇さん」と名前を呼んで対応し、親近感を高めましょう。", snsTemplate: "【かかりつけ薬局として🤝】\n私たちは、患者様お一人お一人の顔が見える関係を大切にしています。\n「いつもの！」で通じる安心感を。\n#かかりつけ #相談" }
+                    ],
+                    info: [
+                        { title: "混雑状況発信", desc: "空いている時間を案内し、利便性を高めましょう。", snsTemplate: "【スムーズな受取のために🕰️】\n平日の14〜16時は比較的ゆったりしています。\nお買い物ついでにぜひお立ち寄りください！\n#時短 #待ち時間なし" }
+                    ]
+                },
+                // 門前・総合（busy）
+                busy: {
+                    env: [
+                        { title: "動線の確保と整理", desc: "スムーズな移動ができるよう、不要な物を置かずスッキリさせましょう。", snsTemplate: "【快適な空間へ✨】\n待合室のレイアウトを少し変更しました。\nベビーカーや車椅子の方も通りやすくなっています。\n#バリアフリー #快適空間" }
+                    ],
+                    hosp: [
+                        { title: "正確で簡潔な説明", desc: "忙しい患者様には、要点を絞ったプロフェッショナルな説明が喜ばれます。", snsTemplate: "【お薬の疑問、即解決💡】\n「これって飲み合わせ大丈夫？」\nその不安、薬剤師がすぐに確認します。\nスピードと正確さで皆様をサポートします。\n#薬剤師 #プロの仕事" },
+                        { title: "待ち時間のアナウンス", desc: "「あと〇分くらいです」と具体的に伝えるだけでストレスが激減します。", snsTemplate: "【待ち時間を有効に📱】\nお薬の準備ができるまで、外出も可能です。\n準備完了をLINEでお知らせするサービスも実施中！\n#処方箋送信 #効率化" }
+                    ],
+                    info: [
+                        { title: "Googleマップ整備", desc: "検索して来る方が多いです。営業時間や駐車場の情報を正確に。", snsTemplate: "【駐車場のご案内🚗】\n当薬局の裏手に3台分のスペースがございます。\nお車でのご来局もお待ちしております。\n#駐車場あり #アクセス" }
+                    ]
+                },
+                // 在宅・施設（home）
+                home: {
+                    env: [
+                        { title: "介護用品の展示", desc: "おむつや口腔ケア用品を見やすく配置し、相談のきっかけを作りましょう。", snsTemplate: "【介護の悩み、ありませんか？】\n口腔ケアスポンジなどのサンプルを展示中です。\n実際に触って試してみてくださいね。\n#在宅介護 #口腔ケア" }
+                    ],
+                    hosp: [
+                        { title: "家族への労い", desc: "患者様本人だけでなく、介護されているご家族へのケアも忘れずに。", snsTemplate: "【介護をする皆様へ🍵】\n毎日お疲れ様です。\nたまにはご自身の体調も気遣ってくださいね。\n私たちも精一杯サポートします。\n#家族介護 #レスパイト" },
+                        { title: "他職種連携アピール", desc: "医師やケアマネと連携している安心感を伝えましょう。", snsTemplate: "【チーム医療で支えます🤝】\n今日は地域のケア会議に参加してきました。\n医師やケアマネさんと連携し、より良い在宅医療を目指します。\n#地域連携 #在宅医療" }
+                    ],
+                    info: [
+                        { title: "訪問サービスの案内", desc: "「薬を届けてくれる」ことを知らない方もいます。わかりやすく発信を。", snsTemplate: "【お薬、お届けします🚚】\n通院が大変になってきた…そんな時はご相談ください。\n薬剤師がご自宅までお薬をお届けし、管理をお手伝いします。\n#訪問薬剤師 #在宅" }
+                    ]
+                }
+            },
+
+            init() {
+                this.loadHistory();
+                this.updateMiniHistory();
+                this.shuffleQuestions();
+            },
+
+            toggleHelp(show) {
+                const modal = document.getElementById('helpModal');
+                if(show) modal.classList.add('show');
+                else modal.classList.remove('show');
+            },
+            
+            toggleResetModal(show) {
+                const modal = document.getElementById('resetModal');
+                if(show) modal.classList.add('show');
+                else modal.classList.remove('show');
+            },
+
+            // New: Toggle History Modal
+            toggleHistoryModal(show) {
+                const modal = document.getElementById('historyClearModal');
+                if(show) modal.classList.add('show');
+                else modal.classList.remove('show');
+            },
+
+            changeType(type) {
+                this.currentType = type;
+            },
+
+            shuffleQuestions() {
+                const pick = (arr, n) => {
+                    const shuffled = [...arr].sort(() => 0.5 - Math.random());
+                    return shuffled.slice(0, n);
+                };
+                this.activeQuestions.env = pick(questionPool.env, 3);
+                this.activeQuestions.hosp = pick(questionPool.hosp, 3);
+                this.activeQuestions.info = pick(questionPool.info, 3);
+                this.renderQuestions();
+            },
+
+            renderQuestions() {
+                const container = document.getElementById('questionsContainer');
+                container.innerHTML = '';
+                const categories = [
+                    { id: 'env', title: '1. 雰囲気・環境', color: 'pink' },
+                    { id: 'hosp', title: '2. 接客・ホスピタリティ', color: 'green' },
+                    { id: 'info', title: '3. 情報発信・利便性', color: 'blue' }
+                ];
+
+                categories.forEach(cat => {
+                    const qs = this.activeQuestions[cat.id];
+                    let html = `<div class="mb-6"><h3 class="font-bold text-gray-700 mb-3 border-l-4 border-${cat.color}-400 pl-3">${cat.title}</h3><div class="bg-white rounded-xl p-2">`;
+                    qs.forEach(q => {
+                        html += `<label class="check-item"><input type="checkbox" class="mr-3 w-5 h-5 accent-pink-500" data-cat="${cat.id}" value="1"><span>${q}</span></label>`;
+                    });
+                    html += `</div></div>`;
+                    container.innerHTML += html;
+                });
+            },
+
+            loadHistory() {
+                const saved = localStorage.getItem('pharmacy_advisor_history');
+                if (saved) { try { this.historyData = JSON.parse(saved); } catch(e) { this.historyData = []; } }
+            },
+
+            saveHistory(totalScore) {
+                const today = new Date().toLocaleDateString('ja-JP', { month: 'short', day: 'numeric' });
+                this.historyData.push({ date: today, score: totalScore });
+                if (this.historyData.length > 10) this.historyData = this.historyData.slice(-10);
+                localStorage.setItem('pharmacy_advisor_history', JSON.stringify(this.historyData));
+            },
+
+            // Modified: clearHistory now opens modal
+            clearHistory() {
+                this.toggleHistoryModal(true);
+            },
+
+            // New: Actually execute clear
+            executeClearHistory() {
+                this.toggleHistoryModal(false);
+                localStorage.removeItem('pharmacy_advisor_history');
+                this.historyData = [];
+                this.updateMiniHistory();
+                this.showToast('履歴を削除しました');
+            },
+
+            updateMiniHistory() {
+                const mini = document.getElementById('miniHistory');
+                if (this.historyData.length > 0) {
+                    const last = this.historyData[this.historyData.length - 1];
+                    document.getElementById('lastDate').innerText = last.date;
+                    document.getElementById('lastScore').innerText = last.score;
+                    mini.classList.remove('hidden');
+                } else {
+                    mini.classList.add('hidden');
+                }
+            },
+
+            analyze() {
+                const envChecks = document.querySelectorAll('input[data-cat="env"]:checked').length;
+                const hospChecks = document.querySelectorAll('input[data-cat="hosp"]:checked').length;
+                const infoChecks = document.querySelectorAll('input[data-cat="info"]:checked').length;
+
+                this.data = { env: envChecks, hosp: hospChecks, info: infoChecks };
+                
+                let total = (envChecks + hospChecks + infoChecks) * 11;
+                if (total > 99) total = 100;
+                if (total === 0 && (envChecks+hospChecks+infoChecks) > 0) total = 10;
+                
+                document.getElementById('totalScore').innerText = total;
+                this.saveHistory(total);
+
+                let weakness = 'env';
+                let minVal = envChecks;
+                if (hospChecks < minVal) { weakness = 'hosp'; minVal = hospChecks; }
+                if (infoChecks < minVal) { weakness = 'info'; }
+
+                const comments = {
+                    high: "素晴らしい！愛され薬局の基準をクリアしています。",
+                    mid: "良い調子です。あと一歩、「感動」を生む工夫をプラス！",
+                    low: "伸び代があります。まずは一つ、簡単なアクションから。"
+                };
+                let comment = total > 80 ? comments.high : (total > 40 ? comments.mid : comments.low);
+                document.getElementById('analysisComment').innerText = comment;
+
+                this.renderChart(envChecks, hospChecks, infoChecks);
+                this.renderHistoryChart();
+                this.renderProposals(weakness);
+
+                document.getElementById('step1').classList.add('hidden');
+                document.getElementById('step2').classList.remove('hidden');
+                window.scrollTo(0,0);
+            },
+
+            renderProposals(weaknessCategory) {
+                const list = document.getElementById('proposalList');
+                list.innerHTML = '';
+                const typeData = this.adviceDatabase[this.currentType] || this.adviceDatabase.local;
+                const advices = typeData[weaknessCategory] || [];
+
+                advices.forEach((adv, index) => {
+                    const html = `
+                        <div class="bg-white border border-gray-100 p-4 rounded-xl shadow-sm hover:shadow-md transition cursor-pointer" onclick="app.selectProposal('${weaknessCategory}', ${index})">
+                            <div class="flex items-start">
+                                <span class="bg-pink-100 text-pink-600 px-2 py-1 rounded text-xs font-bold mr-3 mt-1">推奨</span>
+                                <div>
+                                    <h4 class="font-bold text-gray-800 mb-1">${adv.title}</h4>
+                                    <p class="text-sm text-gray-500 leading-relaxed">${adv.desc}</p>
+                                </div>
+                            </div>
+                            <div class="mt-3 flex justify-end">
+                                <span class="text-xs text-blue-500 font-bold flex items-center">これに取り組む →</span>
+                            </div>
+                        </div>`;
+                    list.innerHTML += html;
+                });
+            },
+
+            generateDrafts(baseText) {
+                // 1. Standard (Original)
+                const v1 = baseText;
+
+                // 2. Friendly
+                let v2 = baseText
+                    .replace(/こんにちは！/g, "こんにちは！😊✨")
+                    .replace(/ました。/g, "ました！")
+                    .replace(/です。/g, "です🎵")
+                    .replace(/【(.*?)】/g, "【 $1 ✨】");
+                v2 += "\n\n気になることがあれば、いつでもお声がけくださいね💊";
+
+                // 3. Simple
+                let v3 = baseText
+                    .replace(/【.*?】\n/, "")
+                    .replace(/こんにちは！\n/, "")
+                    .replace(/#.*/g, "");
+                v3 = "【お知らせ】\n" + v3.trim() + "\n\n#薬局 #健康";
+
+                return [v1, v2, v3];
+            },
+
+            selectProposal(category, index) {
+                const typeData = this.adviceDatabase[this.currentType] || this.adviceDatabase.local;
+                this.currentProposal = typeData[category][index];
+                
+                this.currentDraftVariations = this.generateDrafts(this.currentProposal.snsTemplate);
+                this.setDraftVariation(0);
+
+                document.getElementById('step2').classList.add('hidden');
+                document.getElementById('step3').classList.remove('hidden');
+                window.scrollTo(0,0);
+            },
+            
+            setDraftVariation(index) {
+                const box = document.getElementById('snsDraftText');
+                box.innerText = this.currentDraftVariations[index];
+                
+                document.querySelectorAll('.var-tab').forEach((tab, i) => {
+                    if (i === index) tab.classList.add('active');
+                    else tab.classList.remove('active');
+                });
+            },
+
+            showSnsDraft() {
+                if (!this.currentProposal) {
+                    const defaultText = "【より良い薬局を目指して✨】\nこんにちは！\n当薬局では、患者様により快適に過ごしていただけるよう、サービスの見直しを行いました。\nお気づきの点があれば、いつでもスタッフにお声がけください。\n#地域密着 #薬局 #健康サポート";
+                    this.currentDraftVariations = this.generateDrafts(defaultText);
+                } else {
+                    this.currentDraftVariations = this.generateDrafts(this.currentProposal.snsTemplate);
+                }
+                
+                this.setDraftVariation(0);
+                document.getElementById('step2').classList.add('hidden');
+                document.getElementById('step3').classList.remove('hidden');
+                window.scrollTo(0,0);
+            },
+
+            backToResult() {
+                document.getElementById('step3').classList.add('hidden');
+                document.getElementById('step2').classList.remove('hidden');
+            },
+
+            reset(confirmRequired) {
+                if(confirmRequired) {
+                    this.toggleResetModal(true);
+                } else {
+                    this.executeReset();
+                }
+            },
+            
+            executeReset() {
+                this.toggleResetModal(false);
+                
+                // Reset data
+                this.data = { env: 0, hosp: 0, info: 0 };
+                this.currentProposal = null;
+                document.querySelectorAll('input[type="checkbox"]').forEach(el => el.checked = false);
+                
+                // Reset UI
+                this.updateMiniHistory();
+                this.shuffleQuestions();
+                
+                // Handle view switching
+                const step1 = document.getElementById('step1');
+                step1.classList.remove('hidden');
+                step1.classList.remove('animate-slide-up');
+                void step1.offsetWidth; // Force reflow
+                step1.classList.add('animate-slide-up');
+
+                document.getElementById('step2').classList.add('hidden');
+                document.getElementById('step3').classList.add('hidden');
+                
+                window.scrollTo(0, 0);
+            },
+
+            copyText() {
+                const text = document.getElementById('snsDraftText').innerText;
+                navigator.clipboard.writeText(text).then(
+                    () => this.showToast('コピーしました！'), 
+                    () => this.showToast('コピーに失敗しました')
+                );
+            },
+
+            copyReport() {
+                const score = document.getElementById('totalScore').innerText;
+                const comment = document.getElementById('analysisComment').innerText;
+                const today = new Date().toLocaleDateString('ja-JP');
+                let report = `【愛され薬局診断レポート】\n実施日: ${today}\nタイプ: ${this.getTypeLabel()}\nスコア: ${score}点\n評価: ${comment}\n[内訳]\n- 環境: ${this.data.env}/3\n- 接客: ${this.data.hosp}/3\n- 情報: ${this.data.info}/3\n`;
+                navigator.clipboard.writeText(report).then(
+                    () => this.showToast('診断結果をコピーしました！'), 
+                    () => this.showToast('コピーに失敗しました')
+                );
+            },
+            
+            showToast(msg) {
+                const el = document.getElementById('toast');
+                el.innerText = msg;
+                el.classList.add('show');
+                setTimeout(() => el.classList.remove('show'), 2000);
+            },
+            
+            getTypeLabel() {
+                if(this.currentType === 'local') return '地域密着';
+                if(this.currentType === 'busy') return '門前・総合';
+                if(this.currentType === 'home') return '在宅メイン';
+                return '';
+            },
+
+            renderChart(env, hosp, info) {
+                const ctx = document.getElementById('radarChart').getContext('2d');
+                if (this.chart) this.chart.destroy();
+                this.chart = new Chart(ctx, {
+                    type: 'radar',
+                    data: {
+                        labels: ['雰囲気・環境', '接客・対話', '情報・利便性'],
+                        datasets: [{
+                            label: '今回のスコア',
+                            data: [env, hosp, info],
+                            backgroundColor: 'rgba(255, 139, 167, 0.4)',
+                            borderColor: '#FF8BA7',
+                            pointBackgroundColor: '#E05D82',
+                            borderWidth: 2
+                        }]
+                    },
+                    options: { maintainAspectRatio: false, scales: { r: { angleLines: {display:true}, suggestedMin:0, suggestedMax:3, ticks:{stepSize:1, display:false} } }, plugins: { legend: {display:false} } }
+                });
+            },
+
+            renderHistoryChart() {
+                const ctx = document.getElementById('historyChart').getContext('2d');
+                if (this.historyChart) this.historyChart.destroy();
+                const displayData = this.historyData.slice(-5);
+                this.historyChart = new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        labels: displayData.map(d => d.date),
+                        datasets: [{ label: 'スコア', data: displayData.map(d => d.score), borderColor: '#6BCB77', backgroundColor: 'rgba(107, 203, 119, 0.2)', tension: 0.3, fill: true }]
+                    },
+                    options: { maintainAspectRatio: false, scales: { y: { beginAtZero:true, max:100 } }, plugins: { legend: {display:false} } }
+                });
+            }
+        };
+
+        window.onload = function() {
+            app.init();
+        };
+    </script>
+</body>
+</html>
